@@ -1,0 +1,453 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <script src="webgl-debug.js"></script>
+        <script src="gl-matrix-min.js"></script>
+        <script id="vShader" type="x-shader/x-vertex">
+
+            attribute vec4 aVertexPosition;
+            attribute vec4 aVertexColor;
+
+            uniform mat4 uTransformMatrix;
+            uniform mat4 uPerspectiveViewMatrix;
+            varying vec4 vColor;
+
+            void main()
+            {
+                gl_Position = uPerspectiveViewMatrix * uTransformMatrix * aVertexPosition;
+                vColor = aVertexColor;
+            }
+        </script>
+        <script id="fShader" type="x-shader/x-fragment">
+            precision mediump float;
+            varying vec4 vColor;
+            void main()
+            {
+                gl_FragColor = vColor;
+            }
+        </script>
+
+        <script>
+
+            var gl;
+            var canvas;
+            var shaderProgram;
+            var vertexPositionAttributePointer;
+            var vertexColorAttributePointer;
+            var vertexBuffer;
+            var redColorBuffer;
+            var yellowColorBuffer;
+            var indexBuffer;
+
+            var totalAngle = 0;
+            var cameraDistance = 20;
+            var requestId = 0;
+
+            function createGLContext(canvas)
+            {
+                var context = null;
+
+                context = canvas.getContext("webgl");
+                if (!context)
+                    context = canvas.getContext("experimental-webgl");
+                if (context)
+                {
+                    context.viewportWidth = canvas.width;
+                    context.viewportHeight = canvas.height;
+                }
+                else
+                {
+                    alert("Failed to create WebGL context!");
+                }
+                return context;
+            }
+
+            function loadShader(type, shaderSource)
+            {
+                var shader = gl.createShader(type);
+                gl.shaderSource(shader, shaderSource);
+                gl.compileShader(shader);
+
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+                {
+                    alert("Error compiling shader" + gl.getShaderInfoLog(shader));
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            function setupShaders()
+            {
+                var vertexShaderSource = document.getElementById("vShader").textContent;
+
+                var fragmentShaderSource = document.getElementById("fShader").textContent;
+
+                var vertexShader = loadShader(gl.VERTEX_SHADER, vertexShaderSource);
+
+                var fragmentShader = loadShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+                shaderProgram = gl.createProgram();
+                gl.attachShader(shaderProgram, vertexShader);
+                gl.attachShader(shaderProgram, fragmentShader);
+                gl.linkProgram(shaderProgram);
+
+                if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS))
+                {
+                    alert("Failed to setup shaders");
+                }
+
+                gl.useProgram(shaderProgram);
+
+                vertexPositionAttributePointer = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+                gl.enableVertexAttribArray(vertexPositionAttributePointer);
+
+                vertexColorAttributePointer = gl.getAttribLocation(shaderProgram, "aVertexColor");
+                gl.enableVertexAttribArray(vertexColorAttributePointer);
+
+                transformUniformPointer = gl.getUniformLocation(shaderProgram, "uTransformMatrix");
+                perspectiveViewUniformPointer = gl.getUniformLocation(shaderProgram, "uPerspectiveViewMatrix");
+            }
+            function setupBuffers()
+            {
+
+                vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                var cubeVertices = [
+                    
+                    -1, -1,  1, 1,
+                     1, -1,  1, 1,
+                     1,  1,  1, 1,
+                    -1,  1,  1, 1,
+
+                    
+                    -1, -1, -1, 1,
+                    -1,  1, -1, 1,
+                     1,  1, -1, 1,
+                     1, -1, -1, 1,
+
+                    
+                    -1,  1, -1, 1,
+                    -1,  1,  1, 1,
+                     1,  1,  1, 1,
+                     1,  1, -1, 1,
+
+                    
+                    -1, -1, -1, 1,
+                     1, -1, -1, 1,
+                     1, -1,  1, 1,
+                    -1, -1,  1, 1,
+
+                    
+                     1, -1, -1, 1,
+                     1,  1, -1, 1,
+                     1,  1,  1, 1,
+                     1, -1,  1, 1,
+
+                   
+                    -1, -1, -1, 1,
+                    -1, -1,  1, 1,
+                    -1,  1,  1, 1,
+                    -1,  1, -1, 1];
+
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cubeVertices),	gl.STATIC_DRAW);
+                vertexBuffer.itemSize = 4;
+                vertexBuffer.numberOfItems = 24;
+
+                redColorBuffer=gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, redColorBuffer);
+
+                var redColorVertices = [
+                    0.32, 0.08, 0.09, 1,
+                    0.32, 0.08, 0.09, 1,
+                    0.32, 0.08, 0.09, 1,
+                    0.32, 0.08, 0.09, 1,
+
+                    0.42, 0.11, 0.11, 1,
+                    0.42, 0.11, 0.11, 1,
+                    0.42, 0.11, 0.11, 1,
+                    0.42, 0.11, 0.11, 1,
+
+                    0.5, 0.13, 0.13, 1,
+                    0.5, 0.13, 0.13, 1,
+                    0.5, 0.13, 0.13, 1,    
+                    0.5, 0.13, 0.13, 1,
+
+                    0.6, 0.15, 0.16, 1,
+                    0.6, 0.15, 0.16, 1,
+                    0.6, 0.15, 0.16, 1,
+                    0.6, 0.15, 0.16, 1,
+
+                    0.66, 0.17, 0.18, 1,
+                    0.66, 0.17, 0.18, 1,
+                    0.66, 0.17, 0.18, 1,
+                    0.66, 0.17, 0.18, 1,
+
+                    0.7, 0.18, 0.19, 1,
+                    0.7, 0.18, 0.19, 1,
+                    0.7, 0.18, 0.19, 1,
+                    0.7, 0.18, 0.19, 1];
+
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(redColorVertices), gl.STATIC_DRAW);
+                redColorBuffer.itemSize = 4;
+                redColorBuffer.numberOfItems = 24;
+
+                yellowColorBuffer=gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, yellowColorBuffer);
+               
+                var yellowColorVertices = [
+                    0.5, 0.43, 0.17, 1,
+                    0.5, 0.43, 0.17, 1,
+                    0.5, 0.43, 0.17, 1,
+                    0.5, 0.43, 0.17, 1,
+
+                    0.6, 0.51, 0.21, 1,
+                    0.6, 0.51, 0.21, 1,
+                    0.6, 0.51, 0.21, 1,
+                    0.6, 0.51, 0.21, 1,
+
+                    0.7, 0.6, 0.24, 1,
+                    0.7, 0.6, 0.24, 1,
+                    0.7, 0.6, 0.24, 1,
+                    0.7, 0.6, 0.24, 1,
+
+                    0.8, 0.69, 0.27, 1,
+                    0.8, 0.69, 0.27, 1,
+                    0.8, 0.69, 0.27, 1,   
+                    0.8, 0.69, 0.27, 1,
+
+                    0.9, 0.77, 0.31, 1,
+                    0.9, 0.77, 0.31, 1,
+                    0.9, 0.77, 0.31, 1,
+                    0.9, 0.77, 0.31, 1,
+
+                    1, 0.86, 0.35, 1,
+                    1, 0.86, 0.35, 1,
+                    1, 0.86, 0.35, 1,
+                    1, 0.86, 0.35, 1];
+
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(yellowColorVertices), gl.STATIC_DRAW);
+                yellowColorBuffer.itemSize = 4;
+                yellowColorBuffer.numberOfItems = 24;
+
+                indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                var indexMatrix = [
+                    0,   1,  2,
+                    0,   2,  3,  
+
+                    4,   5,  6,
+                    4,   6,  7,  
+
+                    8,   9, 10,
+                    8,  10, 11,  
+
+                    12, 13, 14,
+                    12, 14, 15,  
+
+                    16, 17, 18,
+                    16, 18, 19,  
+
+                    20, 21, 22,
+                    20, 22, 23];  
+
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indexMatrix), gl.STATIC_DRAW);
+                indexBuffer.itemSize = 1;
+                indexBuffer.numberOfItems = 36;
+            }
+
+            function redraw()
+            {
+                var x, y, z;
+
+                
+                var top = document.getElementById("top_button");
+                var bottom = document.getElementById("bottom_button");
+
+                
+                var front = document.getElementById("front_button");
+                var back = document.getElementById("back_button");
+
+                
+                var left = document.getElementById("left_button");
+                var right = document.getElementById("right_button");
+
+                var animation_button = document.getElementById("anim_button");
+                var localAngle = parseFloat(document.getElementById("angleText").value);
+                var localDistance = parseFloat(document.getElementById("ZText").value);
+
+                var pvMatrix = mat4.create();
+                var viewMatrix = mat4.create();
+                var perspectiveMatrix = mat4.create();
+
+                
+                if(top.checked) z = cameraDistance;
+                else if(bottom.checked) z = -cameraDistance;
+                else z = 5;
+
+                if(front.checked) x = cameraDistance;
+                else if(back.checked) x = -cameraDistance;
+                else x = 5;
+
+                if(right.checked) y = -cameraDistance;
+                else if(left.checked) y = cameraDistance;
+                else y = 5;
+
+                
+                
+               
+                    totalAngle = (localAngle%360)*Math.PI/180.0;
+                    mat4.perspective(perspectiveMatrix, totalAngle, 1, 0.001, cameraDistance*10);
+               
+
+                mat4.lookAt(viewMatrix, [x, y, z], [0, 0, 0], [0, 0, 1]);
+                mat4.multiply(pvMatrix, perspectiveMatrix, viewMatrix);
+
+                gl.uniformMatrix4fv(perspectiveViewUniformPointer, false, new Float32Array(pvMatrix));
+
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.vertexAttribPointer(vertexPositionAttributePointer, vertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, yellowColorBuffer);
+                gl.vertexAttribPointer(vertexColorAttributePointer, yellowColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+                
+                var yellowTranslationVertices = [ 
+                    -5.5, -4.5,    1,   
+                     5.5,  4.5,    1,   
+                    -5.5,  4.5,    1,   
+                     5.5, -4.5,    1,   
+                    -1.0,    0,    7,   
+                     4.0,    0,   11,   
+                     6.0,    0, 14.5];  
+
+
+                var redTranslationVertices = [ 
+                    -6.5,  -4.5,   5,   
+                     4.5,   4.5,   5,   
+                    -6.5,   4.5,   5,   
+                     4.5,  -4.5,   5,   
+                      -9,     0, 9.5,   
+                     3.0,  -4.0,  14,   
+                     3.0,   4.0,  14]; 
+
+                
+                var yellowScalingVertices = [ 
+                     5/2, 3/2, 2/2, 
+                     5/2, 3/2, 2/2, 
+                     5/2, 3/2, 2/2, 
+                     5/2, 3/2, 2/2, 
+                    14/2, 6/2, 5/2, 
+                     4/2, 4/2, 3/2, 
+                     8/2, 6/2, 4/2];  
+
+
+                var redScalingVertices = [ 
+                    3/2, 3/2, 6/2,  
+                    3/2, 3/2, 6/2,  
+                    3/2, 3/2, 6/2,  
+                    3/2, 3/2, 6/2,  
+                    2/2, 2/2, 5/2,  
+                    2/2, 2/2, 5/2,  
+                    2/2, 2/2, 5/2]; 
+
+                var body_part = mat4.create();
+                var tmp_body_part = mat4.create();
+                var p;
+
+                
+                for(p=0; p<=7*3; p+=3)
+                {
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);
+                    mat4.fromTranslation(body_part, [yellowTranslationVertices[p], yellowTranslationVertices[p+1], yellowTranslationVertices[p+2]] );
+                    mat4.fromScaling(tmp_body_part, [yellowScalingVertices[p], yellowScalingVertices[p+1],  yellowScalingVertices[p+2]]);
+                    mat4.multiply(body_part, body_part, tmp_body_part);
+                    gl.uniformMatrix4fv(transformUniformPointer, false, new Float32Array(body_part));
+                    gl.drawElements(gl.TRIANGLES, indexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+                    gl.drawElements(gl.TRIANGLES, yellowColorBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.vertexAttribPointer(vertexPositionAttributePointer, vertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, redColorBuffer);
+                gl.vertexAttribPointer(vertexColorAttributePointer, redColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+                
+                for(p=0; p<=7*3; p+=3)
+                {
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                    mat4.fromTranslation(body_part, [redTranslationVertices[p], redTranslationVertices[p+1], redTranslationVertices[p+2]] );
+                    mat4.fromScaling(tmp_body_part, [redScalingVertices[p], redScalingVertices[p+1], redScalingVertices[p+2]]);
+                    mat4.multiply(body_part, body_part, tmp_body_part);
+                    gl.uniformMatrix4fv(transformUniformPointer, false, new Float32Array(body_part));
+                    gl.drawElements(gl.TRIANGLES, indexBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+                    gl.drawElements(gl.TRIANGLES, yellowColorBuffer.numberOfItems, gl.UNSIGNED_SHORT, 0);
+                }
+            }
+
+            function startup()
+            {
+                canvas = document.getElementById("myGLCanvas");
+                const minDimension=Math.min(window.innerWidth,window.innerHeight);
+                canvas.width = 0.8*minDimension;
+                canvas.height = 0.8*minDimension;
+                gl = WebGLDebugUtils.makeDebugContext(createGLContext(canvas));
+                setupShaders();
+                setupBuffers();
+                gl.clearColor(0.176, 0.213, 0.360, 1.0);
+
+                gl.enable(gl.DEPTH_TEST);
+                gl.viewport(5, 5, gl.viewportWidth, gl.viewportHeight);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                redraw();
+            }
+
+          
+            function checkIfAnimate()
+            {
+                
+               
+                    redraw();
+                
+            }
+        </script>
+    </head>
+    
+    <body onload="startup()">
+        <div class="split left">
+            <div class="centered">
+                <canvas id="myGLCanvas" >
+                </canvas>
+            </div>
+        </div>
+        <div class="split right">
+            <div class="centered">
+                <p>
+                    Camera Angle: <label for="angleText"></label><input type="text" id="angleText" min="0" value="90">
+                </p>
+                <p>
+                    Camera Distance: <label for="ZText"></label><input type="text" id="ZText" value="0.01">
+                </p>
+                <p>
+                    Top:<label for="top_button"></label><input type="radio" name="topbottom" value="1" id="top_button" checked/>
+                    Bottom:<label for="bottom_button"></label><input type="radio" name="topbottom" value="2" id="bottom_button"/>
+                </p>
+                <p>
+                    Front:<label for="front_button"></label><input type="radio" name="frontback" value="3" id="front_button" checked/>
+                    Back:<label for="back_button"></label><input type="radio" name="frontback" value="4" id="back_button"/>
+                </p>
+                <p>
+                    Left:<label for="left_button"></label><input type="radio" name="leftright" value="5" id="left_button" checked/>
+                    Right:<label for="right_button"></label><input type="radio" name="leftright" value="6" id="right_button"/>
+                </p>
+               
+                <p>
+                    <button class="button button1" onClick=checkIfAnimate()>OK</button>
+                </p>
+            </div>
+        </div>
+    </body>
+</html>
